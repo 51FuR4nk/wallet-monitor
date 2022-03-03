@@ -32,12 +32,12 @@ git clone git@github.com:51FuR4nk/wallet-monitor.git
 ```
 or just copy and paste derohe_monitor.py
 
+## Usage
 run the code with
 ```
 python3 derohe_monitor.py
 ```
 
-## Usage
 ```
 usage: python3 {'prog': 'derohe_monitor.py'} [-a]
 
@@ -58,6 +58,7 @@ Option are for:
 - specify the RPC server if not the default one
 - have notification on TG if you don receive reward for X minute. For this funcion 3 parameters net to be set (--tg-bot, --tg-chat, --notify-count)
 
-## Discalimer
+## Notes
 
-This script have been tested on linux only, please report any issue with other systems.
+1. This script have been tested on linux only, please report any issue with other systems.
+2. wait some time after starting your wallet before starting the script. Sometimes the RPC respond with random stuff when is started.
