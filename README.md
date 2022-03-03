@@ -32,6 +32,11 @@ git clone git@github.com:51FuR4nk/wallet-monitor.git
 ```
 or just copy and paste derohe_monitor.py
 
+run the code with
+```
+python3 derohe_monitor.py
+```
+
 ## Usage
 ```
 usage: python3 {'prog': 'derohe_monitor.py'} [-a]
