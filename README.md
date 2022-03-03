@@ -20,7 +20,7 @@ Due to some rounding the script is not 100% accurate but it will get better in t
 ## Requirements
 
 1. Python 3
-2. A running dero wallet with the --rpc-server on. **This must be the wallet you are mining on or receiving the node reward.**
+2. A running dero wallet with the --rpc-server on. **This must be the wallet you are mining on or receiving the node reward.** If the wallet close or is terminated the script will terminate as well.
 e.g.
 ```
 ./dero-wallet-cli-linux-amd64 --unlock --remote --rpc-server
