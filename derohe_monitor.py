@@ -82,7 +82,12 @@ def generic_call(method, params=None):
             "id": "1",
             "method": method,
             "params": params}
-   return requests.post(rpc_server, json=body, headers=headers, timeout=(9, 120))
+   try:
+      r = requests.post(rpc_server, json=body, headers=headers, timeout=(9, 120))
+   except:
+      print("RPC not found. Terminating")
+      sys.exit()
+   return r
 
 
 def get_balance():
@@ -197,7 +202,7 @@ def run(rpc_server, max_zero):
       avg_10080.append(diff)
       #total += diff
       lines += "|{:^10}:{:^10}:{:^10}:{:^10}:{:^10}:{:^10}:{:^10}|\n".format('','1m','15m','1h','6h','24h','7d')
-      lines += "|{:^10}:{:^20}:{:^20}:{:^20}:{:^20}:{:^20}:{:^20}|\n".format('tot gain',
+      lines += "|{:^10}:{:^20}:{:^20}:{:^20}:{:^20}:{:^20}:{:^20}|\n".format('gain',
                                                                              print_sum([diff], 1),
                                                                              print_sum(avg_15, 15),
                                                                              print_sum(avg_60, 60),
@@ -247,8 +252,3 @@ if __name__ == '__main__':
    if args.notify_count:
       max_zero = int(args.notify_count)
    run(rpc_server, max_zero)
-
-
-
-
-
