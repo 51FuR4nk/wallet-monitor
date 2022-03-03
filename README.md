@@ -5,7 +5,7 @@ This script aims to show some statistics about the Dero mined from a node.
 ```
 ------------------------------------------------------------------------------
 |          :    1m    :   15m    :    1h    :    6h    :   24h    :    7d    |
-| tot gain :    0     :  0.0615  :  0.492   :  4.551   : 23.5608  : 57.4359  |
+| tot gain :    0     :  0.0615  :  0.492   :  4.551   : 23.5608  : 56.4359  |
 |                                                                            |
 | Current amount:                                                  56.511130 |
 | Date:                                                  2022-03-03 23:28:48 |
