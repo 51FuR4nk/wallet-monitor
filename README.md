@@ -1,8 +1,7 @@
 # wallet-monitor
 Dero HE Wallet Monitor. Statistics and more
 
-This script aims to show some statistics about the dero mining production produced form a node.
-Example output:
+This script aims to show some statistics about the Dero mined from a node.
 ```
 ------------------------------------------------------------------------------
 |          :    1m    :   15m    :    1h    :    6h    :   24h    :    7d    |
@@ -21,7 +20,7 @@ Due to some rounding the script is not 100% accurate but it will get better in t
 ## Requirements
 
 1. Python 3
-2. A running dero wallet with the --rpc-server on
+2. A running dero wallet with the --rpc-server on. **This must be the wallet you are mining on or receiving the node reward.**
 e.g.
 ```
 ./dero-wallet-cli-linux-amd64 --unlock --remote --rpc-server
