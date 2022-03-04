@@ -139,6 +139,23 @@ def discretize_history(items, start_date):
     return amount_by_minute
 
 
+def daily_totals(items, start_date):
+    amount_by_day = dict()
+    now = datetime.today().replace(hour=0, minute=0, second=0, microsecond=0)
+    while start_date <= now:
+        amount_by_day[start_date] = 0
+        start_date += timedelta(days=1)
+    max_height = 0
+    for item in items:
+        short_date = clean_date(item['time']).replace(hour=0, minute=0, second=0, microsecond=0)
+        if short_date in amount_by_day.keys():
+            amount = item['amount']/RATIO
+            if amount > 100:
+                continue
+            amount_by_day[short_date] += amount
+    return amount_by_day
+
+
 def populate_history():
     coinbase = get_transfers({'coinbase': True})
     last_7D = (datetime.today() - timedelta(days=7)
@@ -184,6 +201,22 @@ def update(height):
             continue
         amounts += amount
     return amounts
+
+
+def plot_graph():
+    lines = ""
+    coinbase = get_transfers({'coinbase': True})
+    last_7D = (datetime.today() - timedelta(days=7)
+               ).replace(hour=0, minute=0, second=0, microsecond=0)
+    days = daily_totals(coinbase['result']['entries'], last_7D)
+    max_value = max(days.values())
+    count = 0
+    for day in days:
+        delimiter = "█" if count%2 == 0 else "░"
+        lines += "| {:10}:{:51}{:12} |\n".format(day.strftime('%Y-%m-%d'), delimiter*(int(days[day]/max_value*50)), round(days[day],4))
+        count += 1
+    return lines
+
 
 
 def run(rpc_server, max_zero):
@@ -232,12 +265,15 @@ def run(rpc_server, max_zero):
         else:
             count_failure = 0
             flag_notify = True
+        lines += "| Current height:{0:59} |\n".format(current_height) 
         lines += "| Current amount:{0:59f} |\n".format(current_balance)
         now = datetime.now()
         fromatted_date = now.strftime('%Y-%m-%d %H:%M:%S')
         lines += "| Date:{0:>69} |\n".format(fromatted_date)
         if passing_time % 15 == 0:
             print
+        lines += "------------------------------------------------------------------------------\n"
+        lines += plot_graph()
         lines += "------------------------------------------------------------------------------\n"
         if max_zero > 0:
             if count_failure > max_zero:
