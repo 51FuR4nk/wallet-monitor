@@ -9,12 +9,13 @@ You should have received a copy of the GNU General Public License along with thi
 If not, see <https://www.gnu.org/licenses/>. 
 '''
 
-import curses
+#import curses
 import sys
 import time
 import json
 import requests
 from datetime import datetime, timedelta
+from dateutil import parser
 import argparse
 from collections import deque
 
@@ -106,14 +107,7 @@ def get_transfers(param=None):
 
 
 def clean_date(date):
-   tmp=""
-   if '.' in date:
-      tmp = date.split('.')[0]
-   else:
-      tmp = date.replace('+01:00','')
-   res = tmp.rfind(":")
-   return datetime.strptime(tmp[:res], "%Y-%m-%dT%H:%M")
-
+   return parser.parse(date, ignoretz=True).replace(second=0, microsecond=0)
 
 def discretize_history(items, start_date):
    amount_by_minute = dict()
