@@ -210,15 +210,16 @@ def update_chart(days, diff):
 
 def update(height):
     amounts = 0
-    coinbase = get_transfers({'coinbase': True})
-    items = coinbase['result']['entries']
-    for index in range(1, len(coinbase['result']['entries'])):
-        if items[-index]['height'] <= height:
-            break
-        amount = items[-index]['amount']/RATIO
-        if amount > 100:
-            continue
-        amounts += amount
+    coinbase = get_transfers({'coinbase': True, 'min_height': height})
+    if 'entries' in coinbase['result'].keys():
+        items = coinbase['result']['entries']
+        for item in items:
+            if item['height'] <= height:
+                break
+            amount = item['amount']/RATIO
+            if amount > 100:
+                continue
+            amounts += amount
     return amounts
 
 
