@@ -145,6 +145,8 @@ def daily_totals(items, start_date):
     while start_date <= now:
         amount_by_day[start_date] = 0
         start_date += timedelta(days=1)
+    while len(amount_by_day) > 7:
+        amount_by_day.pop(min(amount_by_day))
     max_height = 0
     for item in items:
         short_date = clean_date(item['time']).replace(hour=0, minute=0, second=0, microsecond=0)
@@ -164,29 +166,46 @@ def populate_history():
     last_6H = datetime.today() - timedelta(hours=7)
     last_1H = datetime.today() - timedelta(hours=2)
     last_15M = datetime.today() - timedelta(minutes=15)
-    avg_15 = deque(maxlen=15)
-    avg_60 = deque(maxlen=60)
-    avg_360 = deque(maxlen=360)
-    avg_1440 = deque(maxlen=1440)
-    avg_10080 = deque(maxlen=10080)
-    # total = 0
+    gains = dict()
+    gains['avg_15'] = deque(maxlen=15)
+    gains['avg_60'] = deque(maxlen=60)
+    gains['avg_360'] = deque(maxlen=360)
+    gains['avg_1440'] = deque(maxlen=1440)
+    gains['avg_10080'] = deque(maxlen=10080)
     short_hist = discretize_history(coinbase['result']['entries'], last_7D)
     for item in short_hist:
         amount = short_hist[item]/RATIO
         if amount > 100:
             continue
-        # total += amount
         if item > last_7D:
-            avg_10080.append(amount)
+            gains['avg_10080'].append(amount)
         if item > last_24H:
-            avg_1440.append(amount)
+            gains['avg_1440'].append(amount)
         if item > last_6H:
-            avg_360.append(amount)
+            gains['avg_360'].append(amount)
         if item > last_1H:
-            avg_60.append(amount)
+            gains['avg_60'].append(amount)
         if item > last_15M:
-            avg_15.append(amount)
-    return avg_15, avg_60, avg_360, avg_1440, avg_10080  # , total
+            gains['avg_15'].append(amount)
+    return gains
+
+
+def compute_chart():
+    coinbase = get_transfers({'coinbase': True})
+    last_7D = (datetime.today() - timedelta(days=7)
+               ).replace(hour=0, minute=0, second=0, microsecond=0)
+    days = daily_totals(coinbase['result']['entries'], last_7D)
+    return days
+
+
+def update_chart(days, diff):
+    today = datetime.today().replace(hour=0, minute=0, second=0, microsecond=0)
+    if today == max(days):
+        days[today] += diff
+    elif today > max(days):
+        days.pop(min(days))
+        days[today] = diff
+    return days
 
 
 def update(height):
@@ -203,12 +222,8 @@ def update(height):
     return amounts
 
 
-def plot_graph():
+def plot_graph(days):
     lines = ""
-    coinbase = get_transfers({'coinbase': True})
-    last_7D = (datetime.today() - timedelta(days=7)
-               ).replace(hour=0, minute=0, second=0, microsecond=0)
-    days = daily_totals(coinbase['result']['entries'], last_7D)
     max_value = max(days.values())
     count = 0
     for day in days:
@@ -220,13 +235,13 @@ def plot_graph():
 
 
 def run(rpc_server, max_zero):
-    prev_balance = 0
     count_failure = 0
     passing_time = 0
     flag_notify = True
     diff = 0
     height = get_height()
-    avg_15, avg_60, avg_360, avg_1440, avg_10080 = populate_history()
+    gains = populate_history()
+    days = compute_chart()
     while True:
         lines = ""
         sys.stdout.write("\r")
@@ -238,27 +253,24 @@ def run(rpc_server, max_zero):
             height = current_height
         else:
             diff = 0
-        avg_15.append(diff)
-        avg_60.append(diff)
-        avg_360.append(diff)
-        avg_1440.append(diff)
-        avg_10080.append(diff)
-        # total += diff
+        for item in gains:
+            gains[item].append(diff)
+        days = update_chart(days, diff)
         lines += "|{:^10}:{:^10}:{:^10}:{:^10}:{:^10}:{:^10}:{:^10}|\n".format(
             '', '1m', '15m', '1h', '6h', '24h', '7d')
         lines += "|{:^10}:{:^20}:{:^20}:{:^20}:{:^20}:{:^20}:{:^20}|\n".format('gain',
                                                                                print_sum(
                                                                                    [diff], 1),
                                                                                print_sum(
-                                                                                   avg_15, 15),
+                                                                                   gains['avg_15'], 15),
                                                                                print_sum(
-                                                                                   avg_60, 60),
+                                                                                   gains['avg_60'], 60),
                                                                                print_sum(
-                                                                                   avg_360, 360),
+                                                                                   gains['avg_360'], 360),
                                                                                print_sum(
-                                                                                   avg_1440, 1440),
-                                                                               print_sum(avg_10080, 10080))
-        # print_sum([total], 1))
+                                                                                   gains['avg_1440'], 1440),
+                                                                               print_sum(
+                                                                                   gains['avg_10080'], 10080))
         lines += "|"+" "*76+"|\n"
         if diff == 0:
             count_failure += 1
@@ -270,10 +282,8 @@ def run(rpc_server, max_zero):
         now = datetime.now()
         fromatted_date = now.strftime('%Y-%m-%d %H:%M:%S')
         lines += "| Date:{0:>69} |\n".format(fromatted_date)
-        if passing_time % 15 == 0:
-            print
         lines += "------------------------------------------------------------------------------\n"
-        lines += plot_graph()
+        lines += plot_graph(days)
         lines += "------------------------------------------------------------------------------\n"
         if max_zero > 0:
             if count_failure > max_zero:
@@ -283,14 +293,15 @@ def run(rpc_server, max_zero):
                 if flag_notify:
                     notify(message)
                     flag_notify = False
-        prev_balance = current_balance
-        passing_time += 1
+        if passing_time > 0: 
+            for item in range(len(lines.split('\n'))-1):
+                sys.stdout.write('\x1b[1A')
+                sys.stdout.write('\x1b[2K')
         sys.stdout.write(lines)
         sys.stdout.flush()
+        passing_time += 1
         time.sleep(60)
-        for item in range(len(lines.split('\n'))-1):
-            sys.stdout.write('\x1b[1A')
-            sys.stdout.write('\x1b[2K')
+        
 
 
 if __name__ == '__main__':
