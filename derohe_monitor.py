@@ -37,7 +37,10 @@ def get_arguments():
         usage='python3 %s [-a]')
     parser.add_argument('--rpc-server',
                         action='store',
-                        help='rpc-server address. Default 127.0.0.1:10109')
+                        help='Wallet rpc-server address. Default 127.0.0.1:10103')
+    parser.add_argument('--node-rpc-server',
+                        action='store',
+                        help='Node wallet rpc-server address.')
     parser.add_argument('--tg-bot',
                         action='store',
                         help='Telegram bot token')
@@ -51,6 +54,164 @@ def get_arguments():
                         action='store',
                         help="Notify if you don't get reward after X minutes. defult disabled")
     return parser.parse_args()
+
+
+class WalletParser():
+
+    def __init__(self, rpc_server):
+        self.rpc_server = rpc_server
+        self.height = self.get_height()
+        self.min_height = self.height - 35000 # considering 18 second a block every 7 days you have 33600 blocks
+        self.gains = self.populate_history()
+        self.days = self.daily_totals()
+
+        
+
+    def generic_call(self, method, params=None):
+        headers = {'Content-Type': 'application/json'}
+        body = {"jsonrpc": "2.0",
+                "id": "1",
+                "method": method,
+                "params": params}
+        try:
+            r = requests.post(self.rpc_server, json=body,
+                              headers=headers, timeout=(9, 120))
+        except:
+            print("RPC not found. Terminating")
+            sys.exit()
+        return r
+
+
+    def get_balance(self):
+        result = self.generic_call("GetBalance")
+        return json.loads(result.text)['result']['balance']/RATIO
+
+
+    def get_height(self):
+        result = self.generic_call("GetHeight")
+        return json.loads(result.text)['result']['height']
+
+
+    def get_transfers(self, param=None):
+        result = self.generic_call("GetTransfers", param)
+        return json.loads(result.text)
+
+
+    def clean_date(self, date):
+        return parser.parse(date, ignoretz=True).replace(second=0, microsecond=0)
+
+
+    def discretize_history(self, items, start_date):
+        amount_by_minute = dict()
+        now = datetime.today().replace(second=0, microsecond=0)
+        while start_date <= now:
+            amount_by_minute[start_date] = 0
+            start_date += timedelta(minutes=1)
+        max_height = 0
+        for item in items:
+            short_date = self.clean_date(item['time'])
+            if short_date in amount_by_minute.keys():
+                amount_by_minute[short_date] += item['amount']
+        return amount_by_minute
+
+
+    def daily_totals(self):
+        items = self.get_transfers({'coinbase': True, 'min_height': self.min_height})['result']['entries']
+        start_date = (datetime.today() - timedelta(days=7)
+                   ).replace(hour=0, minute=0, second=0, microsecond=0)
+        amount_by_day = dict()
+        now = datetime.today().replace(hour=0, minute=0, second=0, microsecond=0)
+        while start_date <= now:
+            amount_by_day[start_date] = 0
+            start_date += timedelta(days=1)
+        while len(amount_by_day) > 7:
+            amount_by_day.pop(min(amount_by_day))
+        for item in items:
+            short_date = self.clean_date(item['time']).replace(hour=0, minute=0, second=0, microsecond=0)
+            if short_date in amount_by_day.keys():
+                amount = item['amount']/RATIO
+                if amount > 100:
+                    continue
+                amount_by_day[short_date] += amount
+        return amount_by_day
+
+
+    def populate_history(self):
+        coinbase = self.get_transfers({'coinbase': True, 'min_height': self.min_height})
+        last_7D = (datetime.today() - timedelta(days=7)
+                   ).replace(second=0, microsecond=0)
+        last_24H = datetime.today() - timedelta(days=1)
+        last_6H = datetime.today() - timedelta(hours=7)
+        last_1H = datetime.today() - timedelta(hours=2)
+        last_15M = datetime.today() - timedelta(minutes=15)
+        gains = dict()
+        gains['avg_15'] = deque(maxlen=15)
+        gains['avg_60'] = deque(maxlen=60)
+        gains['avg_360'] = deque(maxlen=360)
+        gains['avg_1440'] = deque(maxlen=1440)
+        gains['avg_10080'] = deque(maxlen=10080)
+        short_hist = self.discretize_history(coinbase['result']['entries'], last_7D)
+        for item in short_hist:
+            amount = short_hist[item]/RATIO
+            if amount > 100:
+                continue
+            if item > last_7D:
+                gains['avg_10080'].append(amount)
+            if item > last_24H:
+                gains['avg_1440'].append(amount)
+            if item > last_6H:
+                gains['avg_360'].append(amount)
+            if item > last_1H:
+                gains['avg_60'].append(amount)
+            if item > last_15M:
+                gains['avg_15'].append(amount)
+        return gains
+
+
+    def update_chart(self, diff):
+        today = datetime.today().replace(hour=0, minute=0, second=0, microsecond=0)
+        if today == max(self.days):
+            self.days[today] += diff
+        elif today > max(self.days):
+            self.days.pop(min(self.days))
+            self.days[today] = diff
+
+
+    def get_diff(self, height):
+        amounts = 0.0
+        coinbase = self.get_transfers({'coinbase': True, 'min_height': height})
+        if 'entries' in coinbase['result'].keys():
+            items = coinbase['result']['entries']
+            for item in items:
+                if item['height'] <= height:
+                    break
+                amount = item['amount']/RATIO
+                if amount > 100:
+                    continue
+                amounts += amount
+        return amounts
+
+
+    def update(self):
+        diff = 0.0
+        current_height = self.get_height()
+        if current_height > self.height:
+            diff = self.get_diff(self.height)
+            self.height = current_height
+        self.update_chart(diff)
+        for item in self.gains:
+            self.gains[item].append(diff)
+
+
+def plot_graph(days):
+    lines = ""
+    max_value = max(days.values())
+    count = 0
+    for day in days:
+        delimiter = "█" if count%2 == 0 else "░"
+        lines += "| {:10}:{:51}{:12} |\n".format(day.strftime('%Y-%m-%d'), delimiter*(int(days[day]/max_value*50)), round(days[day],4))
+        count += 1
+    return lines
 
 
 def telegram(message):
@@ -91,200 +252,65 @@ def print_sum(data, supposed_len):
     return "\033[93m{}\033[00m".format(round(sum(data), 4))
 
 
-def generic_call(method, params=None):
-    headers = {'Content-Type': 'application/json'}
-    body = {"jsonrpc": "2.0",
-            "id": "1",
-            "method": method,
-            "params": params}
-    try:
-        r = requests.post(rpc_server, json=body,
-                          headers=headers, timeout=(9, 120))
-    except:
-        print("RPC not found. Terminating")
-        sys.exit()
-    return r
-
-
-def get_balance():
-    result = generic_call("GetBalance")
-    return json.loads(result.text)['result']['balance']/RATIO
-
-
-def get_height():
-    result = generic_call("GetHeight")
-    return json.loads(result.text)['result']['height']
-
-
-def get_transfers(param=None):
-    result = generic_call("GetTransfers", param)
-    return json.loads(result.text)
-
-
-def clean_date(date):
-    return parser.parse(date, ignoretz=True).replace(second=0, microsecond=0)
-
-
-def discretize_history(items, start_date):
-    amount_by_minute = dict()
-    now = datetime.today().replace(second=0, microsecond=0)
-    while start_date <= now:
-        amount_by_minute[start_date] = 0
-        start_date += timedelta(minutes=1)
-    max_height = 0
-    for item in items:
-        short_date = clean_date(item['time'])
-        if short_date in amount_by_minute.keys():
-            amount_by_minute[short_date] += item['amount']
-    return amount_by_minute
-
-
-def daily_totals(items, start_date):
-    amount_by_day = dict()
-    now = datetime.today().replace(hour=0, minute=0, second=0, microsecond=0)
-    while start_date <= now:
-        amount_by_day[start_date] = 0
-        start_date += timedelta(days=1)
-    while len(amount_by_day) > 7:
-        amount_by_day.pop(min(amount_by_day))
-    max_height = 0
-    for item in items:
-        short_date = clean_date(item['time']).replace(hour=0, minute=0, second=0, microsecond=0)
-        if short_date in amount_by_day.keys():
-            amount = item['amount']/RATIO
-            if amount > 100:
-                continue
-            amount_by_day[short_date] += amount
-    return amount_by_day
-
-
-def populate_history():
-    coinbase = get_transfers({'coinbase': True})
-    last_7D = (datetime.today() - timedelta(days=7)
-               ).replace(second=0, microsecond=0)
-    last_24H = datetime.today() - timedelta(days=1)
-    last_6H = datetime.today() - timedelta(hours=7)
-    last_1H = datetime.today() - timedelta(hours=2)
-    last_15M = datetime.today() - timedelta(minutes=15)
-    gains = dict()
-    gains['avg_15'] = deque(maxlen=15)
-    gains['avg_60'] = deque(maxlen=60)
-    gains['avg_360'] = deque(maxlen=360)
-    gains['avg_1440'] = deque(maxlen=1440)
-    gains['avg_10080'] = deque(maxlen=10080)
-    short_hist = discretize_history(coinbase['result']['entries'], last_7D)
-    for item in short_hist:
-        amount = short_hist[item]/RATIO
-        if amount > 100:
-            continue
-        if item > last_7D:
-            gains['avg_10080'].append(amount)
-        if item > last_24H:
-            gains['avg_1440'].append(amount)
-        if item > last_6H:
-            gains['avg_360'].append(amount)
-        if item > last_1H:
-            gains['avg_60'].append(amount)
-        if item > last_15M:
-            gains['avg_15'].append(amount)
-    return gains
-
-
-def compute_chart():
-    coinbase = get_transfers({'coinbase': True})
-    last_7D = (datetime.today() - timedelta(days=7)
-               ).replace(hour=0, minute=0, second=0, microsecond=0)
-    days = daily_totals(coinbase['result']['entries'], last_7D)
-    return days
-
-
-def update_chart(days, diff):
-    today = datetime.today().replace(hour=0, minute=0, second=0, microsecond=0)
-    if today == max(days):
-        days[today] += diff
-    elif today > max(days):
-        days.pop(min(days))
-        days[today] = diff
-    return days
-
-
-def update(height):
-    amounts = 0
-    coinbase = get_transfers({'coinbase': True, 'min_height': height})
-    if 'entries' in coinbase['result'].keys():
-        items = coinbase['result']['entries']
-        for item in items:
-            if item['height'] <= height:
-                break
-            amount = item['amount']/RATIO
-            if amount > 100:
-                continue
-            amounts += amount
-    return amounts
-
-
-def plot_graph(days):
-    lines = ""
-    max_value = max(days.values())
-    count = 0
-    for day in days:
-        delimiter = "█" if count%2 == 0 else "░"
-        lines += "| {:10}:{:51}{:12} |\n".format(day.strftime('%Y-%m-%d'), delimiter*(int(days[day]/max_value*50)), round(days[day],4))
-        count += 1
-    return lines
-
-
-
-def run(rpc_server, max_zero):
+def run(rpc_server, max_zero, node_rpc_server=None):
     count_failure = 0
     passing_time = 0
     flag_notify = True
-    diff = 0
-    height = get_height()
-    gains = populate_history()
-    days = compute_chart()
+    diff = 0.0
+    wp = WalletParser(rpc_server)
+    node_wp = None if node_rpc_server is None else WalletParser(node_rpc_server)
+
     while True:
         lines = ""
         sys.stdout.write("\r")
-        current_balance = get_balance()
         lines += "------------------------------------------------------------------------------\n"
-        current_height = get_height()
-        if current_height > height:
-            diff = update(height)
-            height = current_height
-        else:
-            diff = 0
-        for item in gains:
-            gains[item].append(diff)
-        days = update_chart(days, diff)
+        wp.update()
+        if node_wp is not None:
+            node_wp.update()
         lines += "|{:^10}:{:^10}:{:^10}:{:^10}:{:^10}:{:^10}:{:^10}|\n".format(
             '', '1m', '15m', '1h', '6h', '24h', '7d')
         lines += "|{:^10}:{:^20}:{:^20}:{:^20}:{:^20}:{:^20}:{:^20}|\n".format('gain',
                                                                                print_sum(
                                                                                    [diff], 1),
                                                                                print_sum(
-                                                                                   gains['avg_15'], 15),
+                                                                                   wp.gains['avg_15'], 15),
                                                                                print_sum(
-                                                                                   gains['avg_60'], 60),
+                                                                                   wp.gains['avg_60'], 60),
                                                                                print_sum(
-                                                                                   gains['avg_360'], 360),
+                                                                                   wp.gains['avg_360'], 360),
                                                                                print_sum(
-                                                                                   gains['avg_1440'], 1440),
+                                                                                   wp.gains['avg_1440'], 1440),
                                                                                print_sum(
-                                                                                   gains['avg_10080'], 10080))
+                                                                                   wp.gains['avg_10080'], 10080))
+        if node_wp is not None:
+            lines += "|{:>10}:{:^20}:{:^20}:{:^20}:{:^20}:{:^20}:{:^20}|\n".format('node gain',
+                                                                               print_sum(
+                                                                                   [diff], 1),
+                                                                               print_sum(
+                                                                                   node_wp.gains['avg_15'], 15),
+                                                                               print_sum(
+                                                                                   node_wp.gains['avg_60'], 60),
+                                                                               print_sum(
+                                                                                   node_wp.gains['avg_360'], 360),
+                                                                               print_sum(
+                                                                                   node_wp.gains['avg_1440'], 1440),
+                                                                               print_sum(
+                                                                                   node_wp.gains['avg_10080'], 10080))
         lines += "|"+" "*76+"|\n"
-        if diff == 0:
+        if diff == 0.0:
             count_failure += 1
         else:
             count_failure = 0
             flag_notify = True
-        lines += "| Current height:{0:59} |\n".format(current_height) 
-        lines += "| Current amount:{0:59f} |\n".format(current_balance)
+        lines += "| {:14}:{:59} |\n".format("Current height", wp.height) 
+        lines += "| {:14}:{:59f} |\n".format("Wallet amount", wp.get_balance())
+        if node_wp is not None:
+            lines += "| {:14}:{:59f} |\n".format("Node amount", node_wp.get_balance())
         now = datetime.now()
-        fromatted_date = now.strftime('%Y-%m-%d %H:%M:%S')
-        lines += "| Date:{0:>69} |\n".format(fromatted_date)
+        formatted_date = now.strftime('%Y-%m-%d %H:%M:%S')
+        lines += "| {:14}:{:>59} |\n".format("Date", formatted_date)
         lines += "------------------------------------------------------------------------------\n"
-        lines += plot_graph(days)
+        lines += plot_graph(wp.days)
         lines += "------------------------------------------------------------------------------\n"
         if max_zero > 0:
             if count_failure > max_zero:
@@ -308,8 +334,12 @@ def run(rpc_server, max_zero):
 if __name__ == '__main__':
     max_zero = 0
     args = get_arguments()
+    node_rpc_server = None
     if args.rpc_server:
         rpc_server = "http://{}/json_rpc".format(args.rpc_server)
+    if args.node_rpc_server:
+        node_rpc_server = "http://{}/json_rpc".format(args.node_rpc_server)
+    print(node_rpc_server)
     if args.tg_bot:
         TELEGRAM_BOT_TOKEN = args.tg_bot
     if args.tg_chat:
@@ -318,4 +348,4 @@ if __name__ == '__main__':
         DISCORD_WEBHOOK = args.discord_webhook
     if args.notify_count:
         max_zero = int(args.notify_count)
-    run(rpc_server, max_zero)
+    run(rpc_server, max_zero, node_rpc_server)
