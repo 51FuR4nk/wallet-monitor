@@ -53,6 +53,9 @@ def get_arguments():
     parser.add_argument('--notify-count',
                         action='store',
                         help="Notify if you don't get reward after X minutes. defult disabled")
+    parser.add_argument('--one-shot',
+                        action='store_true',
+                        help="Display data and exit")
     return parser.parse_args()
 
 
@@ -252,7 +255,7 @@ def print_sum(data, supposed_len):
     return "\033[93m{}\033[00m".format(round(sum(data), 4))
 
 
-def run(rpc_server, max_zero, node_rpc_server=None):
+def run(rpc_server, max_zero, node_rpc_server=None, one_shot=False):
     count_failure = 0
     passing_time = 0
     flag_notify = True
@@ -327,6 +330,8 @@ def run(rpc_server, max_zero, node_rpc_server=None):
         sys.stdout.write(lines)
         sys.stdout.flush()
         passing_time += 1
+        if one_shot:
+            sys.exit(0)
         time.sleep(60)
         
 
@@ -339,7 +344,6 @@ if __name__ == '__main__':
         rpc_server = "http://{}/json_rpc".format(args.rpc_server)
     if args.node_rpc_server:
         node_rpc_server = "http://{}/json_rpc".format(args.node_rpc_server)
-    print(node_rpc_server)
     if args.tg_bot:
         TELEGRAM_BOT_TOKEN = args.tg_bot
     if args.tg_chat:
@@ -348,4 +352,4 @@ if __name__ == '__main__':
         DISCORD_WEBHOOK = args.discord_webhook
     if args.notify_count:
         max_zero = int(args.notify_count)
-    run(rpc_server, max_zero, node_rpc_server)
+    run(rpc_server, max_zero, node_rpc_server, args.one_shot)
