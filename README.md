@@ -38,7 +38,7 @@ e.g.
 
 ## Installation
 ```
-git clone git@github.com:51FuR4nk/wallet-monitor.git
+git clone https://github.com/51FuR4nk/wallet-monitor.git
 ```
 or just copy and paste derohe_monitor.py
 
