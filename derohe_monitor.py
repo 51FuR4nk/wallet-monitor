@@ -23,8 +23,10 @@ RATIO = 100000
 TELEGRAM_BOT_TOKEN = None
 TELEGRAM_CHAT_ID = None
 DISCORD_WEBHOOK = None
-rpc_server = "http://127.0.0.1:10103/json_rpc"
+wallet_rpc_server = "http://127.0.0.1:10103/json_rpc"
+node_rpc_server = "http://127.0.0.1:10103/json_rpc"
 HEIGHT = 0
+DAYS = 7
 
 
 def get_arguments():
@@ -56,17 +58,22 @@ def get_arguments():
     parser.add_argument('--one-shot',
                         action='store_true',
                         help="Display data and exit")
+    parser.add_argument('--day-range',
+                        action='store',
+                        help="Number of days to plot")
     return parser.parse_args()
 
 
 class WalletParser():
 
-    def __init__(self, rpc_server):
+    def __init__(self, rpc_server, days=7):
         self.rpc_server = rpc_server
         self.height = self.get_height()
-        self.min_height = self.height - 35000 # considering 18 second a block every 7 days you have 33600 blocks
+        self.days = int(days)
+        from_block = 5000 * self.days # considering 18 second block is around 4800 block every day
+        self.min_height = self.height - from_block if (self.height - from_block) >= 0 else 0
         self.gains = self.populate_history()
-        self.days = self.daily_totals()
+        self.daily_gain = self.daily_totals()
 
         
 
@@ -87,12 +94,22 @@ class WalletParser():
 
     def get_balance(self):
         result = self.generic_call("GetBalance")
-        return json.loads(result.text)['result']['balance']/RATIO
+        try:
+            return json.loads(result.text)['result']['balance']/RATIO
+        except:
+            print("Fail to get balance from RPC. Terminating")
+            sys.exit()
+        return None
 
 
     def get_height(self):
         result = self.generic_call("GetHeight")
-        return json.loads(result.text)['result']['height']
+        try:
+            return json.loads(result.text)['result']['height']
+        except:
+            print("Fail to get height from RPC. Terminating")
+            sys.exit()
+        return None
 
 
     def get_transfers(self, param=None):
@@ -120,14 +137,14 @@ class WalletParser():
 
     def daily_totals(self):
         items = self.get_transfers({'coinbase': True, 'min_height': self.min_height})['result']['entries']
-        start_date = (datetime.today() - timedelta(days=7)
+        start_date = (datetime.today() - timedelta(days=self.days)
                    ).replace(hour=0, minute=0, second=0, microsecond=0)
         amount_by_day = dict()
         now = datetime.today().replace(hour=0, minute=0, second=0, microsecond=0)
         while start_date <= now:
             amount_by_day[start_date] = 0
             start_date += timedelta(days=1)
-        while len(amount_by_day) > 7:
+        while len(amount_by_day) > self.days:
             amount_by_day.pop(min(amount_by_day))
         for item in items:
             short_date = self.clean_date(item['time']).replace(hour=0, minute=0, second=0, microsecond=0)
@@ -173,11 +190,11 @@ class WalletParser():
 
     def update_chart(self, diff):
         today = datetime.today().replace(hour=0, minute=0, second=0, microsecond=0)
-        if today == max(self.days):
-            self.days[today] += diff
-        elif today > max(self.days):
-            self.days.pop(min(self.days))
-            self.days[today] = diff
+        if today == max(self.daily_gain):
+            self.daily_gain[today] += diff
+        elif today > max(self.daily_gain):
+            self.daily_gain.pop(min(self.daily_gain))
+            self.daily_gain[today] = diff
 
 
     def get_diff(self, height):
@@ -206,13 +223,75 @@ class WalletParser():
             self.gains[item].append(diff)
 
 
-def plot_graph(days):
+class DerodParser():
+
+    def __init__(self, rpc_server):
+        self.rpc_server=rpc_server
+        self.daily_gain=self.avg_diff()
+
+    def generic_call(self, method, params=None):
+        headers = {'Content-Type': 'application/json'}
+        body = {"jsonrpc": "2.0",
+                "id": "1",
+                "method": method,
+                "params": params}
+        try:
+            r = requests.post(self.rpc_server, json=body,
+                              headers=headers, timeout=(9, 120))
+        except:
+            print("RPC not found. Terminating")
+            sys.exit()
+        return r
+
+    def get_block(self, height):
+        result = self.generic_call("DERO.GetBlock", {"height": height})
+        return json.loads(result.text)
+
+    def get_info(self):
+        result = self.generic_call("DERO.GetInfo")
+        return json.loads(result.text)
+
+    def get_height(self):
+        data = self.generic_call("DERO.GetHeight")
+        return json.loads(data.text)['result']['height']
+
+    def avg_diff(self):
+        current_height = self.get_height()
+        start_date = (datetime.today() - timedelta(days=7)
+                   ).replace(hour=0, minute=0, second=0, microsecond=0)
+        diff_by_day = dict()
+        now = datetime.today().replace(hour=0, minute=0, second=0, microsecond=0)
+        while start_date <= now:
+            diff_by_day[start_date] = []
+            start_date += timedelta(days=1)
+        while len(diff_by_day) > 7:
+            diff_by_day.pop(min(diff_by_day))
+        for i in range(current_height-35000, current_height):
+            print(i)
+            blk = self.get_block(i)
+            short_date = datetime.fromtimestamp(blk['result']['block_header']['timestamp']//1000).replace(hour=0, minute=0, second=0, microsecond=0)
+            if short_date in diff_by_day.keys():
+                diff_by_day[short_date].append(int(blk['result']['block_header']['difficulty']))
+        for item in diff_by_day:
+            if len(diff_by_day[item]) == 0:
+                diff_by_day[item] = 0
+            else:
+                diff_by_day[item] = sum(diff_by_day[item])/len(diff_by_day[item])/1000000000
+        return diff_by_day
+
+
+
+def plot_graph(daily_gain, unit='DERO'):
+    colors = {"blue":   "\033[96m",
+              "green":  "\033[92m",
+              "red":    "033[93m",
+            }
     lines = ""
-    max_value = max(days.values())
+    max_value = max(daily_gain.values())
     count = 0
-    for day in days:
+    for item in daily_gain:
         delimiter = "█" if count%2 == 0 else "░"
-        lines += "| {:10}:{:51}{:12} |\n".format(day.strftime('%Y-%m-%d'), delimiter*(int(days[day]/max_value*50)), round(days[day],4))
+        lines += "| {:10}:{:51}{:7.2f} {:4} |\n".format(item.strftime('%Y-%m-%d'), delimiter*(int(daily_gain[item]/max_value*50)), round(daily_gain[item],2), unit)
         count += 1
     return lines
 
@@ -249,20 +328,27 @@ def print_avg(data, supposed_len):
 
 def print_sum(data, supposed_len):
     if supposed_len == 1:
-        return "\033[96m{}\033[00m".format(round(sum(data), 4))
+        return "\033[96m{:.4f}\033[00m".format(round(sum(data), 4))
     if len(data) == supposed_len:
-        return "\033[92m{}\033[00m".format(round(sum(data), 4))
-    return "\033[93m{}\033[00m".format(round(sum(data), 4))
+        return "\033[92m{:.4f}\033[00m".format(round(sum(data), 4))
+    return "\033[93m{:.4f}\033[00m".format(round(sum(data), 4))
 
 
-def run(rpc_server, max_zero, node_rpc_server=None, one_shot=False):
+def compute_power(gain, diff):
+    power = dict()
+    for item in gain:
+        power[item] = (gain[item]/0.06150)*((diff[item]*1000000)/48000)/1000
+    return power
+
+
+def run(rpc_server, max_zero, node_rpc_server=None, one_shot=False, main_rpc=None):
     count_failure = 0
     passing_time = 0
     flag_notify = True
     diff = 0.0
-    wp = WalletParser(rpc_server)
+    wp = WalletParser(rpc_server, DAYS)
     node_wp = None if node_rpc_server is None else WalletParser(node_rpc_server)
-
+    dp =  None if main_rpc is None else DerodParser(main_rpc)
     while True:
         lines = ""
         sys.stdout.write("\r")
@@ -270,6 +356,8 @@ def run(rpc_server, max_zero, node_rpc_server=None, one_shot=False):
         wp.update()
         if node_wp is not None:
             node_wp.update()
+        if dp is not None:
+            power = compute_power(wp.days, dp.days)
         lines += "|{:^10}:{:^10}:{:^10}:{:^10}:{:^10}:{:^10}:{:^10}|\n".format(
             '', '1m', '15m', '1h', '6h', '24h', '7d')
         lines += "|{:^10}:{:^20}:{:^20}:{:^20}:{:^20}:{:^20}:{:^20}|\n".format('gain',
@@ -313,7 +401,12 @@ def run(rpc_server, max_zero, node_rpc_server=None, one_shot=False):
         formatted_date = now.strftime('%Y-%m-%d %H:%M:%S')
         lines += "| {:14}:{:>59} |\n".format("Date", formatted_date)
         lines += "------------------------------------------------------------------------------\n"
-        lines += plot_graph(wp.days)
+        lines += plot_graph(wp.daily_gain)
+        if dp is not None:
+            lines += "------------------------------------------------------------------------------\n"
+            lines += plot_graph(dp.days, "GH/s")
+            lines += "------------------------------------------------------------------------------\n"
+            lines += plot_graph(power, "MH/s")
         lines += "------------------------------------------------------------------------------\n"
         if max_zero > 0:
             if count_failure > max_zero:
@@ -341,7 +434,7 @@ if __name__ == '__main__':
     args = get_arguments()
     node_rpc_server = None
     if args.rpc_server:
-        rpc_server = "http://{}/json_rpc".format(args.rpc_server)
+        wallet_rpc_server = "http://{}/json_rpc".format(args.rpc_server)
     if args.node_rpc_server:
         node_rpc_server = "http://{}/json_rpc".format(args.node_rpc_server)
     if args.tg_bot:
@@ -352,4 +445,6 @@ if __name__ == '__main__':
         DISCORD_WEBHOOK = args.discord_webhook
     if args.notify_count:
         max_zero = int(args.notify_count)
-    run(rpc_server, max_zero, node_rpc_server, args.one_shot)
+    if args.day_range:
+        DAYS = args.day_range
+    run(wallet_rpc_server, max_zero, node_rpc_server, args.one_shot)#, "http://127.0.0.1:10102/json_rpc")
