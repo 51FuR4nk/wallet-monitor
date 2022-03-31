@@ -59,7 +59,7 @@ def get_arguments():
                         action='store_true',
                         help="Display data and exit")
     parser.add_argument('--day-range',
-                        action='store',
+                        action='store', type=int,
                         help="Number of days to plot")
     return parser.parse_args()
 
@@ -415,7 +415,7 @@ def run(rpc_server, max_zero, node_rpc_server=None, one_shot=False, main_rpc=Non
                 lines += "\033[91m{}\033[00m\n".format(message)
                 if flag_notify:
                     notify(message)
-                    flag_notify = False
+                    count_failure = 0
         if passing_time > 0: 
             for item in range(len(lines.split('\n'))-1):
                 sys.stdout.write('\x1b[1A')
