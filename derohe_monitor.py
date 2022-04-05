@@ -291,7 +291,7 @@ def plot_graph(daily_gain, unit='DERO'):
     count = 0
     for item in daily_gain:
         delimiter = "█" if count%2 == 0 else "░"
-        lines += "| {:10}:{:51}{:7.2f} {:4} |\n".format(item.strftime('%Y-%m-%d'), delimiter*(int(daily_gain[item]/max_value*50)), round(daily_gain[item],2), unit)
+        lines += "| {:10}:{:51}{:9.4f} {:4} |\n".format(item.strftime('%Y-%m-%d'), delimiter*(int(daily_gain[item]/max_value*50)), round(daily_gain[item],4), unit)
         count += 1
     return lines
 
@@ -352,15 +352,15 @@ def run(rpc_server, max_zero, node_rpc_server=None, one_shot=False, main_rpc=Non
     while True:
         lines = ""
         sys.stdout.write("\r")
-        lines += "------------------------------------------------------------------------------\n"
+        lines += "--------------------------------------------------------------------------------\n"
         wp.update()
         if node_wp is not None:
             node_wp.update()
         if dp is not None:
             power = compute_power(wp.days, dp.days)
-        lines += "|{:^10}:{:^10}:{:^10}:{:^10}:{:^10}:{:^10}:{:^10}|\n".format(
+        lines += "|{:^12}:{:^10}:{:^10}:{:^10}:{:^10}:{:^10}:{:^10}|\n".format(
             '', '1m', '15m', '1h', '6h', '24h', '7d')
-        lines += "|{:^10}:{:^20}:{:^20}:{:^20}:{:^20}:{:^20}:{:^20}|\n".format('gain',
+        lines += "|{:^12}:{:^20}:{:^20}:{:^20}:{:^20}:{:^20}:{:^20}|\n".format('gain',
                                                                                print_sum(
                                                                                    [diff], 1),
                                                                                print_sum(
@@ -374,7 +374,7 @@ def run(rpc_server, max_zero, node_rpc_server=None, one_shot=False, main_rpc=Non
                                                                                print_sum(
                                                                                    wp.gains['avg_10080'], 10080))
         if node_wp is not None:
-            lines += "|{:>10}:{:^20}:{:^20}:{:^20}:{:^20}:{:^20}:{:^20}|\n".format('node gain',
+            lines += "|{:>12}:{:^20}:{:^20}:{:^20}:{:^20}:{:^20}:{:^20}|\n".format('node gain',
                                                                                print_sum(
                                                                                    [diff], 1),
                                                                                print_sum(
@@ -387,27 +387,27 @@ def run(rpc_server, max_zero, node_rpc_server=None, one_shot=False, main_rpc=Non
                                                                                    node_wp.gains['avg_1440'], 1440),
                                                                                print_sum(
                                                                                    node_wp.gains['avg_10080'], 10080))
-        lines += "|"+" "*76+"|\n"
+        lines += "|"+" "*78+"|\n"
         if diff == 0.0:
             count_failure += 1
         else:
             count_failure = 0
             flag_notify = True
-        lines += "| {:14}:{:59} |\n".format("Current height", wp.height) 
-        lines += "| {:14}:{:59f} |\n".format("Wallet amount", wp.get_balance())
+        lines += "| {:14}:{:61} |\n".format("Current height", wp.height) 
+        lines += "| {:14}:{:61} |\n".format("Wallet amount", wp.get_balance())
         if node_wp is not None:
-            lines += "| {:14}:{:59f} |\n".format("Node amount", node_wp.get_balance())
+            lines += "| {:14}:{:61} |\n".format("Node amount", node_wp.get_balance())
         now = datetime.now()
         formatted_date = now.strftime('%Y-%m-%d %H:%M:%S')
-        lines += "| {:14}:{:>59} |\n".format("Date", formatted_date)
-        lines += "------------------------------------------------------------------------------\n"
+        lines += "| {:14}:{:>61} |\n".format("Date", formatted_date)
+        lines += "--------------------------------------------------------------------------------\n"
         lines += plot_graph(wp.daily_gain)
         if dp is not None:
-            lines += "------------------------------------------------------------------------------\n"
+            lines += "--------------------------------------------------------------------------------\n"
             lines += plot_graph(dp.days, "GH/s")
-            lines += "------------------------------------------------------------------------------\n"
+            lines += "--------------------------------------------------------------------------------\n"
             lines += plot_graph(power, "MH/s")
-        lines += "------------------------------------------------------------------------------\n"
+        lines += "--------------------------------------------------------------------------------\n"
         if max_zero > 0:
             if count_failure > max_zero:
                 message = 'Since {} minutes you are not receiving rewards!'.format(
