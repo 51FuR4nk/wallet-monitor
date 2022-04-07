@@ -357,7 +357,7 @@ def run(rpc_server, max_zero, node_rpc_server=None, one_shot=False, main_rpc=Non
         if node_wp is not None:
             node_wp.update()
         if dp is not None:
-            power = compute_power(wp.days, dp.days)
+            power = compute_power(wp.days, dp.daily_gain)
         lines += "|{:^12}:{:^10}:{:^10}:{:^10}:{:^10}:{:^10}:{:^10}|\n".format(
             '', '1m', '15m', '1h', '6h', '24h', '7d')
         lines += "|{:^12}:{:^20}:{:^20}:{:^20}:{:^20}:{:^20}:{:^20}|\n".format('gain',
@@ -404,7 +404,7 @@ def run(rpc_server, max_zero, node_rpc_server=None, one_shot=False, main_rpc=Non
         lines += plot_graph(wp.daily_gain)
         if dp is not None:
             lines += "--------------------------------------------------------------------------------\n"
-            lines += plot_graph(dp.days, "GH/s")
+            lines += plot_graph(dp.daily_gain, "GH/s")
             lines += "--------------------------------------------------------------------------------\n"
             lines += plot_graph(power, "MH/s")
         lines += "--------------------------------------------------------------------------------\n"
@@ -447,4 +447,4 @@ if __name__ == '__main__':
         max_zero = int(args.notify_count)
     if args.day_range:
         DAYS = args.day_range
-    run(wallet_rpc_server, max_zero, node_rpc_server, args.one_shot)#, "http://127.0.0.1:10102/json_rpc")
+    run(wallet_rpc_server, max_zero, node_rpc_server, args.one_shot, "http://127.0.0.1:10102/json_rpc")
