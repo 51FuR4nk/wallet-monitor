@@ -447,4 +447,4 @@ if __name__ == '__main__':
         max_zero = int(args.notify_count)
     if args.day_range:
         DAYS = args.day_range
-    run(wallet_rpc_server, max_zero, node_rpc_server, args.one_shot, "http://127.0.0.1:10102/json_rpc")
+    run(wallet_rpc_server, max_zero, node_rpc_server, args.one_shot)#, "http://127.0.0.1:10102/json_rpc")
