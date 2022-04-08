@@ -12,12 +12,12 @@ If not, see <https://www.gnu.org/licenses/>.
 import sys
 import time
 import json
-from beepy import beep
 import requests
-from datetime import datetime, timedelta
-from dateutil import parser
 import argparse
+from beepy import beep
+from dateutil import parser
 from collections import deque
+from datetime import datetime, timedelta
 
 
 RATIO = 100000
