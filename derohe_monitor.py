@@ -13,10 +13,11 @@ import sys
 import time
 import json
 import requests
-from datetime import datetime, timedelta
-from dateutil import parser
 import argparse
+from beepy import beep
+from dateutil import parser
 from collections import deque
+from datetime import datetime, timedelta
 
 
 RATIO = 100000
@@ -60,13 +61,16 @@ def get_arguments():
                         help="Display data and exit")
     parser.add_argument('--day-range',
                         action='store', type=int,
-                        help="Number of days to plot")
+                        help="Number of days to plot. Default 7")
+    parser.add_argument('--sound',
+                        action='store_true', default=False,
+                        help="Play sound when a new miniblock is found")
     return parser.parse_args()
 
 
 class WalletParser():
 
-    def __init__(self, rpc_server, days=7):
+    def __init__(self, rpc_server, days=7, sound=False):
         self.rpc_server = rpc_server
         self.height = self.get_height()
         self.days = int(days)
@@ -74,6 +78,7 @@ class WalletParser():
         self.min_height = self.height - from_block if (self.height - from_block) >= 0 else 0
         self.gains = self.populate_history()
         self.daily_gain = self.daily_totals()
+        self.sound = sound
 
         
 
@@ -209,6 +214,8 @@ class WalletParser():
                 if amount > 100:
                     continue
                 amounts += amount
+                if self.sound:
+                    beep(sound="coin")
         return amounts
 
 
@@ -280,7 +287,6 @@ class DerodParser():
         return diff_by_day
 
 
-
 def plot_graph(daily_gain, unit='DERO'):
     colors = {"blue":   "\033[96m",
               "green":  "\033[92m",
@@ -341,12 +347,12 @@ def compute_power(gain, diff):
     return power
 
 
-def run(rpc_server, max_zero, node_rpc_server=None, one_shot=False, main_rpc=None):
+def run(rpc_server, max_zero, node_rpc_server=None, one_shot=False, sound=False, main_rpc=None):
     count_failure = 0
     passing_time = 0
     flag_notify = True
     diff = 0.0
-    wp = WalletParser(rpc_server, DAYS)
+    wp = WalletParser(rpc_server, DAYS, sound)
     node_wp = None if node_rpc_server is None else WalletParser(node_rpc_server)
     dp =  None if main_rpc is None else DerodParser(main_rpc)
     while True:
@@ -447,4 +453,4 @@ if __name__ == '__main__':
         max_zero = int(args.notify_count)
     if args.day_range:
         DAYS = args.day_range
-    run(wallet_rpc_server, max_zero, node_rpc_server, args.one_shot)#, "http://127.0.0.1:10102/json_rpc")
+    run(wallet_rpc_server, max_zero, node_rpc_server, args.one_shot, args.sound)

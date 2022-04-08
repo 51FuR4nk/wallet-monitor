@@ -36,6 +36,12 @@ e.g.
 ./dero-wallet-cli-linux-amd64 --unlock --remote --rpc-server
 ```
 
+Pip library required:
+```
+pip3 install beepy
+pip3 install python-dateutil
+```
+
 ## Installation
 ```
 git clone https://github.com/51FuR4nk/wallet-monitor.git
@@ -51,22 +57,30 @@ python3 derohe_monitor.py
 ```
 usage: python3 {'prog': 'derohe_monitor.py'} [-a]
 
-DeroHE wallet monitor
-
 optional arguments:
   -h, --help            show this help message and exit
   --rpc-server RPC_SERVER
-                        rpc-server address. Default 127.0.0.1:10109
+                        Wallet rpc-server address. Default 127.0.0.1:10103
+  --node-rpc-server NODE_RPC_SERVER
+                        Node wallet rpc-server address.
   --tg-bot TG_BOT       Telegram bot token
   --tg-chat TG_CHAT     Telegram chat id
+  --discord-webhook DISCORD_WEBHOOK
+                        Discord webhook url
   --notify-count NOTIFY_COUNT
                         Notify if you don't get reward after X minutes. defult
                         disabled
+  --one-shot            Display data and exit
+  --day-range DAY_RANGE
+                        Number of days to plot. Default 7
+  --sound               Play sound when a new miniblock is found
 ```
 
 Option are for:
 - specify the RPC server if not the default one
 - have notification on TG if you don receive reward for X minute. For this funcion 3 parameters net to be set (--tg-bot, --tg-chat, --notify-count)
+- one shot, will plot the graph and exit
+- day-range will plot an arbitrary number of days. Default is 7
 
 ## Notes
 
