@@ -297,14 +297,14 @@ def plot_graph(daily_gain, unit='DERO'):
               "red":    "033[93m",
             }
     lines = ""
+    bar = ""
     max_value = max(daily_gain.values())
     count = 0
     for item in daily_gain:
         delimiter = "█" if count%2 == 0 else "░"
         if max_value > 0:
-            lines += "| {:10}:{:51}{:9.4f} {:4} |\n".format(item.strftime('%Y-%m-%d'), delimiter*(int(daily_gain[item]/max_value*50)), round(daily_gain[item],4), unit)
-        else:
-            lines += "| {:10}:{:51}{:9.4f} {:4} |\n".format(item.strftime('%Y-%m-%d'), "", round(daily_gain[item],4), unit)
+            bar = delimiter*(int(daily_gain[item]/max_value*50))
+        lines += "| {:10}:{:51}{:9.4f} {:4} |\n".format(item.strftime('%Y-%m-%d'), bar, round(daily_gain[item],4), unit)
         count += 1
     return lines
 
