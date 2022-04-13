@@ -141,23 +141,26 @@ class WalletParser():
 
 
     def daily_totals(self):
-        items = self.get_transfers({'coinbase': True, 'min_height': self.min_height})['result']['entries']
+        amount_by_day = dict()
         start_date = (datetime.today() - timedelta(days=self.days)
                    ).replace(hour=0, minute=0, second=0, microsecond=0)
-        amount_by_day = dict()
+        
         now = datetime.today().replace(hour=0, minute=0, second=0, microsecond=0)
         while start_date <= now:
             amount_by_day[start_date] = 0
             start_date += timedelta(days=1)
         while len(amount_by_day) > self.days:
             amount_by_day.pop(min(amount_by_day))
-        for item in items:
-            short_date = self.clean_date(item['time']).replace(hour=0, minute=0, second=0, microsecond=0)
-            if short_date in amount_by_day.keys():
-                amount = item['amount']/RATIO
-                if amount > 100:
-                    continue
-                amount_by_day[short_date] += amount
+        raw_items = self.get_transfers({'coinbase': True, 'min_height': self.min_height})
+        if 'entries' in raw_items['result']:
+            items = raw_items['result']['entries']
+            for item in items:
+                short_date = self.clean_date(item['time']).replace(hour=0, minute=0, second=0, microsecond=0)
+                if short_date in amount_by_day.keys():
+                    amount = item['amount']/RATIO
+                    if amount > 100:
+                        continue
+                    amount_by_day[short_date] += amount
         return amount_by_day
 
 
@@ -175,21 +178,22 @@ class WalletParser():
         gains['avg_360'] = deque(maxlen=360)
         gains['avg_1440'] = deque(maxlen=1440)
         gains['avg_10080'] = deque(maxlen=10080)
-        short_hist = self.discretize_history(coinbase['result']['entries'], last_7D)
-        for item in short_hist:
-            amount = short_hist[item]/RATIO
-            if amount > 100:
-                continue
-            if item > last_7D:
-                gains['avg_10080'].append(amount)
-            if item > last_24H:
-                gains['avg_1440'].append(amount)
-            if item > last_6H:
-                gains['avg_360'].append(amount)
-            if item > last_1H:
-                gains['avg_60'].append(amount)
-            if item > last_15M:
-                gains['avg_15'].append(amount)
+        if 'entries' in coinbase['result']:
+            short_hist = self.discretize_history(coinbase['result']['entries'], last_7D)
+            for item in short_hist:
+                amount = short_hist[item]/RATIO
+                if amount > 100:
+                    continue
+                if item > last_7D:
+                    gains['avg_10080'].append(amount)
+                if item > last_24H:
+                    gains['avg_1440'].append(amount)
+                if item > last_6H:
+                    gains['avg_360'].append(amount)
+                if item > last_1H:
+                    gains['avg_60'].append(amount)
+                if item > last_15M:
+                    gains['avg_15'].append(amount)
         return gains
 
 
@@ -297,7 +301,10 @@ def plot_graph(daily_gain, unit='DERO'):
     count = 0
     for item in daily_gain:
         delimiter = "█" if count%2 == 0 else "░"
-        lines += "| {:10}:{:51}{:9.4f} {:4} |\n".format(item.strftime('%Y-%m-%d'), delimiter*(int(daily_gain[item]/max_value*50)), round(daily_gain[item],4), unit)
+        if max_value > 0:
+            lines += "| {:10}:{:51}{:9.4f} {:4} |\n".format(item.strftime('%Y-%m-%d'), delimiter*(int(daily_gain[item]/max_value*50)), round(daily_gain[item],4), unit)
+        else:
+            lines += "| {:10}:{:51}{:9.4f} {:4} |\n".format(item.strftime('%Y-%m-%d'), "", round(daily_gain[item],4), unit)
         count += 1
     return lines
 
