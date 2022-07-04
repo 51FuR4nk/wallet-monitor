@@ -28,7 +28,8 @@ wallet_rpc_server = "http://127.0.0.1:10103/json_rpc"
 node_rpc_server = "http://127.0.0.1:10103/json_rpc"
 HEIGHT = 0
 DAYS = 7
-
+MINIBLOCK_WORTH = 0.0615
+GRAPH_WIDTH = 50
 
 def get_arguments():
     """
@@ -299,11 +300,16 @@ def plot_graph(daily_gain, unit='DERO'):
     lines = ""
     bar = ""
     max_value = max(daily_gain.values())
+    max_miniblocks = max_value / MINIBLOCK_WORTH
+
     count = 0
     for item in daily_gain:
-        delimiter = "█" if count%2 == 0 else "░"
-        if max_value > 0:
-            bar = delimiter*(int(daily_gain[item]/max_value*50))
+        if max_miniblocks > GRAPH_WIDTH:
+            percentage = int(daily_gain[item] / max_value * GRAPH_WIDTH)
+            bar = "▆" * percentage
+        else:
+            miniblocks = int(daily_gain[item] / MINIBLOCK_WORTH)
+            bar = "■" * miniblocks
         lines += "| {:10}:{:51}{:9.4f} {:4} |\n".format(item.strftime('%Y-%m-%d'), bar, round(daily_gain[item],4), unit)
         count += 1
     return lines
@@ -350,7 +356,7 @@ def print_sum(data, supposed_len):
 def compute_power(gain, diff):
     power = dict()
     for item in gain:
-        power[item] = (gain[item]/0.06150)*((diff[item]*1000000)/48000)/1000
+        power[item] = (gain[item]/MINIBLOCK_WORTH)*((diff[item]*1000000)/48000)/1000
     return power
 
 
